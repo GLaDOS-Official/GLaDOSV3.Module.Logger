@@ -1,12 +1,4 @@
-﻿using Discord.Commands;
-using Discord.WebSocket;
-using GLaDOSV3.Helpers;
-using System;
-using System.Reflection;
-using System.Runtime.Loader;
-using GLaDOSV3.Models;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.VisualBasic.CompilerServices;
+﻿using GLaDOSV3.Models;
 
 namespace GLaDOSV3.Module.Logger
 {

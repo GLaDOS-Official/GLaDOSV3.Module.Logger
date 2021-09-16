@@ -3,10 +3,8 @@ using Discord.Rest;
 using Discord.WebSocket;
 using GLaDOSV3.Helpers;
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace GLaDOSV3.Module.Logger
