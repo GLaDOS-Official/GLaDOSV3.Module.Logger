@@ -31,13 +31,14 @@ namespace GLaDOSV3.Module.Logger
             discord.UserBanned += this.DiscordUserBanned;
             discord.UserUnbanned += this.DiscordUserUnbanned;
             discord.GuildMemberUpdated += this.DiscordGuildMemberUpdated;
-            //discord.MessageDeleted += this.DiscordMessageDeleted;
-            //discord.MessageUpdated += this.DiscordMessageUpdated;
             discord.ChannelCreated += this.DiscordChannelCreated;
-            //discord.InviteDeleted += this.DiscordInviteDeleted;
-            //discord.InviteCreated += this.DiscordInviteCreated;
-            //discord.MessagesBulkDeleted += this.DiscordMessagesBulkDeleted;
             discord.ChannelUpdated += this.DiscordChannelUpdated;
+
+            discord.InviteDeleted += this.DiscordInviteDeleted;
+            discord.InviteCreated += this.DiscordInviteCreated;
+            //discord.MessagesBulkDeleted += this.DiscordMessagesBulkDeleted;
+            discord.MessageDeleted += this.DiscordMessageDeleted;
+            discord.MessageUpdated += this.DiscordMessageUpdated;
         }
 
         private async Task DiscordChannelUpdated(SocketChannel beforeChannel, SocketChannel afterChannel)
@@ -75,15 +76,50 @@ namespace GLaDOSV3.Module.Logger
 
         }
 #endif
-        //private Task DiscordInviteCreated(SocketInvite invite)
-        //{
-        //    throw new NotImplementedException();
-        //}
+        private async Task DiscordInviteCreated(SocketInvite invite)
+        {
+            var inviteChannel = invite.Channel;
+            var name = inviteChannel.GetType().Name;
+            name = name.Split("Socket")[1];
+            name = name.Insert(name.IndexOf("Channel", StringComparison.Ordinal), " ");
+            var builder = new EmbedBuilder
+            {
+                Description = $"Invite to {name} <#{inviteChannel.Id} created: {invite.Code}>"
+            };
+            builder.AddField("Name", inviteChannel.Name);
+            builder.AddField("Id", $"```ini\nUser = Unknown\nChannel = {inviteChannel.Id}```");
+            builder.WithAuthor("Unknown", "https://discordapp.com/assets/1cbd08c76f8af6dddce02c5138971129.png");
+            var logs = await inviteChannel.Guild.GetAuditLogsAsync(15, null, null, null, ActionType.ChannelCreated).FlattenAsync();
+            var log = logs.FirstOrDefault(a => ((InviteDeleteAuditLogData)a.Data).ChannelId == inviteChannel.Id);
+            if (log                                            == null) return;
+            if (DateTime.UtcNow.Ticks - log.CreatedAt.UtcTicks > 3000) return;
+            builder.WithAuthor(log.User);
+            builder.Fields[1].Value = $"```ini\nUser = {log.User.Id}\nChannel = {inviteChannel.Id}```";
+            try { }
+            finally { builder.Build(); }
+        }
 
-        //private Task DiscordInviteDeleted(SocketGuildChannel inviteChannel, string deletedCode)
-        //{
-        //    throw new NotImplementedException();
-        //}
+        private async Task DiscordInviteDeleted(SocketGuildChannel inviteChannel, string deletedCode)
+        {
+            var name = inviteChannel.GetType().Name;
+            name = name.Split("Socket")[1];
+            name = name.Insert(name.IndexOf("Channel", StringComparison.Ordinal), " ");
+            var builder = new EmbedBuilder
+            {
+                Description = $"Invite to {name} <#{inviteChannel.Id} deleted: {deletedCode}>"
+            };
+            builder.AddField("Name", inviteChannel.Name);
+            builder.AddField("Id", $"```ini\nUser = Unknown\nChannel = {inviteChannel.Id}```");
+            builder.WithAuthor("Unknown", "https://discordapp.com/assets/1cbd08c76f8af6dddce02c5138971129.png");
+            var logs = await inviteChannel.Guild.GetAuditLogsAsync(15, null, null, null, ActionType.ChannelCreated).FlattenAsync();
+            var log = logs.FirstOrDefault(a => ((InviteDeleteAuditLogData)a.Data).ChannelId == inviteChannel.Id);
+            if (log == null) return;
+            if (DateTime.UtcNow.Ticks - log.CreatedAt.UtcTicks > 3000) return;
+            builder.WithAuthor(log.User);
+            builder.Fields[1].Value = $"```ini\nUser = {log.User.Id}\nChannel = {inviteChannel.Id}```";
+            try { }
+            finally { builder.Build(); }
+        }
 
         private async Task DiscordChannelCreated(SocketChannel createdChannel)
         {
@@ -94,7 +130,7 @@ namespace GLaDOSV3.Module.Logger
             name = name.Insert(name.IndexOf("Channel", StringComparison.Ordinal), " ");
             var builder = new EmbedBuilder
             {
-                Description = $"{name} created <#{channel.Id}>"
+                Description = $"{name} <#{channel.Id}> created"
             };
             builder.AddField("Name", channel.Name);
             builder.AddField("Id", $"```ini\nUser = Unknown\nChannel = {createdChannel.Id}```");
@@ -109,15 +145,49 @@ namespace GLaDOSV3.Module.Logger
             finally { builder.Build(); }
         }
 
-        //private Task DiscordMessageUpdated(Cacheable<IMessage, ulong> originalMessage, SocketMessage updatedMessage, ISocketMessageChannel source)
-        //{
-        //    throw new NotImplementedException();
-        //}
+        private async Task DiscordMessageUpdated(Cacheable<IMessage, ulong> originalMessage, SocketMessage updatedMessage, ISocketMessageChannel source)
+        {
+            var name = updatedMessage.Channel.GetType().Name;
+            name = name.Split("Socket")[1];
+            name = name.Insert(name.IndexOf("Channel", StringComparison.Ordinal), " ");
+            var oldMessage = await Tools.EscapeMentionsAsync(updatedMessage.Channel,
+                                                       originalMessage.HasValue ? originalMessage.Value.Content : "Not cached");
+            var oldPinned  = originalMessage.HasValue && originalMessage.Value.IsPinned;
+            var newMessage = await Tools.EscapeMentionsAsync(updatedMessage.Channel, updatedMessage.Content);
+            var builder = new EmbedBuilder
+            {
+                Description = $"Message {(oldPinned != updatedMessage.IsPinned ? "pinned" :"edited")} {name} <#{updatedMessage.Channel.Id}>"
+            };
+            if (oldPinned != updatedMessage.IsPinned)
+            {
+                builder.AddField("Old message", oldMessage);
+                builder.AddField("New message", newMessage);
+            }
 
-        //private Task DiscordMessageDeleted(Cacheable<IMessage, ulong> cachedMessage, Cacheable<IMessageChannel, ulong> channel)
-        //{
-        //    throw new NotImplementedException();
-        //}
+            builder.WithAuthor(updatedMessage.Author);
+            builder.Fields[^1].Value = $"```ini\nUser = {updatedMessage.Author.Id}\nChannel = {updatedMessage.Channel.Id}\nMessage = {updatedMessage.Id}```";
+            try { }
+            finally { builder.Build(); }
+        }
+
+        private async Task DiscordMessageDeleted(Cacheable<IMessage, ulong> cachedMessage, Cacheable<IMessageChannel, ulong> cachedChannel)
+        {
+            SocketTextChannel channel = cachedChannel.HasValue ? (SocketTextChannel)cachedChannel.Value : null;
+            if (channel == null) return;
+            SocketMessage oldMessage = cachedMessage.HasValue ? (SocketMessage) cachedMessage.Value : null;
+            if (oldMessage == null) return;
+            var name = oldMessage.Channel.GetType().Name;
+            name = name.Split("Socket")[1];
+            name = name.Insert(name.IndexOf("Channel", StringComparison.Ordinal), " ");
+            var builder = new EmbedBuilder
+            {
+                Description = $"Message deleted in {name} <#{channel.Id}>"
+            };
+            builder.WithAuthor(oldMessage.Author);
+            builder.Fields[1].Value = $"```ini\nUser = {oldMessage.Author.Id}\nChannel = {channel.Id}\nMessage = {cachedMessage.Id}```";
+            try { }
+            finally { builder.Build(); }
+        }
 
         //private Task DiscordUserVoiceStateUpdated(SocketUser user, SocketVoiceState before, SocketVoiceState after)
         //{
@@ -138,7 +208,7 @@ namespace GLaDOSV3.Module.Logger
             builder.WithAuthor("Unknown", "https://discordapp.com/assets/1cbd08c76f8af6dddce02c5138971129.png");
             var logs = await after.Guild.GetAuditLogsAsync(15, null, null, null, ActionType.MemberUpdated).FlattenAsync();
             var log = logs.FirstOrDefault(a => ((MemberUpdateAuditLogData)a.Data).Target.Id == after.Id);
-            if (log                                            == null) return;
+            if (log == null) return;
             if (DateTime.UtcNow.Ticks - log.CreatedAt.UtcTicks > 3000) return;
             builder.WithAuthor(log.User);
             try { }
@@ -157,8 +227,8 @@ namespace GLaDOSV3.Module.Logger
             builder.WithAuthor(user);
             await Task.Delay(1000);
             var logs = await server.GetAuditLogsAsync(15, null, null, null, ActionType.Unban).FlattenAsync();
-            var log  = logs.FirstOrDefault(a => ((UnbanAuditLogData)a.Data).Target.Id == user.Id);
-            if (log                                            == null) return;
+            var log = logs.FirstOrDefault(a => ((UnbanAuditLogData)a.Data).Target.Id == user.Id);
+            if (log == null) return;
             if (DateTime.UtcNow.Ticks - log.CreatedAt.UtcTicks > 3000) return;
 
             if (!string.IsNullOrWhiteSpace(log.Reason)) builder.Fields[1].Value = log.Reason;
@@ -177,17 +247,17 @@ namespace GLaDOSV3.Module.Logger
             {
                 Description = $"{user} was banned"
             };
-            builder.AddField("User Information",$"{user.Username}#{user.Discriminator} ({user.Id}) {user.Mention} {(user.IsBot ? "(Bot)" : "")}");
+            builder.AddField("User Information", $"{user.Username}#{user.Discriminator} ({user.Id}) {user.Mention} {(user.IsBot ? "(Bot)" : "")}");
             builder.AddField("Reason", "None provided");
             builder.AddField("Id", $"```ini\nUser = {user.Id}\nStaff member = Unknown```");
             builder.WithAuthor(user);
             await Task.Delay(1000);
             var logs = await server.GetAuditLogsAsync(15, null, null, null, ActionType.Ban).FlattenAsync();
             var log = logs.FirstOrDefault(a => ((BanAuditLogData)a.Data).Target.Id == user.Id);
-            if (log                                            == null) return;
+            if (log == null) return;
             if (DateTime.UtcNow.Ticks - log.CreatedAt.UtcTicks > 3000) return;
 
-            if(!string.IsNullOrWhiteSpace(log.Reason)) builder.Fields[1].Value = log.Reason;
+            if (!string.IsNullOrWhiteSpace(log.Reason)) builder.Fields[1].Value = log.Reason;
             builder.Fields[2].Value = $"```ini\nUser = {user.Id}\nStaff member = {log.User.Id}```";
             builder.WithFooter(log.User.ToString(),
                                string.IsNullOrWhiteSpace(log.User.AvatarId)
@@ -210,7 +280,7 @@ namespace GLaDOSV3.Module.Logger
 
             var logs = await before.GetAuditLogsAsync(15, null, null, null, ActionType.GuildUpdated).FlattenAsync();
             var log = logs.First();
-            if (log                                            == null) return;
+            if (log == null) return;
             if (DateTime.UtcNow.Ticks - log.CreatedAt.UtcTicks > 3000) return;
             builder.WithAuthor(log.User);
             builder.AddField("Id", $"```ini\nUser = {log.User.Id}\nRole = {after.Id}```");
@@ -317,7 +387,7 @@ namespace GLaDOSV3.Module.Logger
                     string output =
                         $"Allow: {string.Join(", ", permission.Permissions.ToAllowList())}\nDeny: {string.Join(", ", permission.Permissions.ToDenyList())}";
 
-                    builder.AddField("Permissions of "+role.Name, output);
+                    builder.AddField("Permissions of " + role.Name, output);
                 }
             }
 
